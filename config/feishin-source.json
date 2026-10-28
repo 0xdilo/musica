@@ -1,0 +1,11 @@
+{
+  "feishin": {
+    "url": "https://github.com/jeffvli/feishin.git",
+    "tag": "v1.17.0",
+    "commit": "5c169aca8d550032c9aa6e8e2b9f624d03d42fec"
+  },
+  "node-mpv": {
+    "url": "https://github.com/jeffvli/Node-MPV.git",
+    "commit": "32b4d64395289ad710c41d481d2707a7acfc228f"
+  }
+}

@@ -1,0 +1,27 @@
+# Runtime data and secrets stay local.
+.env
+.env.*
+!.env.example
+.venv/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.db
+*.db-*
+*.sqlite*
+*.pem
+*.key
+*cookies*
+config/feishin.env
+data/
+state/
+music/
+logs/
+backups/
+bin/
+vendor/
+.playwright-mcp/
+.DS_Store
+
+# Generated cover images
+assets/

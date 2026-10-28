@@ -1,0 +1,97 @@
+/* Keep listening screens focused on music rather than stream URLs. */
+.mantine-Stack-root:has(> .fs-radio-list-items-module-radio-item) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.fs-radio-list-items-module-radio-item-button
+  .fs-radio-list-items-module-meta-line {
+  display: none;
+}
+
+.fs-radio-list-items-module-meta::after {
+  content: "SomaFM · Radio live";
+  color: #a3a3a3;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.fs-radio-list-items-module-meta > :first-child {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+main .fs-radio-list-items-module-radio-item {
+  border: 1px solid #ffffff0d;
+  border-radius: 12px;
+  transition: background 150ms ease;
+}
+
+main .fs-radio-list-items-module-radio-item:hover {
+  background: #ffffff0d;
+}
+
+.fs-radio-list-items-module-radio-item-button
+  .fs-radio-list-items-module-thumbnail {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  /* Song tables use absolute cell positions. Keep those virtualized row offsets,
+     and give the combined artwork/title/artist cell the available phone width. */
+  main [role="grid"]:has(.fs-title-combined-column-module-title-combined) {
+    container-type: inline-size;
+  }
+
+  main:has(.fs-title-combined-column-module-title-combined)
+    [role="grid"]:has(.fs-item-table-list-column-module-header-container) {
+    display: none;
+  }
+
+  main
+    [role="grid"]:has(.fs-title-combined-column-module-title-combined)
+    [role="row"]
+    > .fs-item-table-list-column-module-container:not(
+      .fs-title-combined-column-module-title-combined
+    ):not(:has(.fs-row-index-column-module-full-size-content)) {
+    display: none;
+  }
+
+  main .fs-title-combined-column-module-title-combined {
+    min-width: calc(100cqw - 44px);
+    max-width: calc(100cqw - 44px);
+  }
+
+  .fs-page-header-module-title-wrapper
+    .fs-library-header-bar-module-header-container {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .fs-page-header-module-title-wrapper h1 {
+    font-size: 1.5rem;
+  }
+
+  .fs-page-header-module-title-wrapper > .mantine-Group-root {
+    flex: 0 1 42%;
+    min-width: 0;
+  }
+
+  .fs-page-header-module-title-wrapper > .mantine-Group-root > div {
+    max-width: 100%;
+  }
+
+  .fs-page-header-module-title-wrapper .mantine-TextInput-root {
+    min-width: 100%;
+  }
+
+  .fs-radio-list-items-module-radio-item-button
+    .fs-radio-list-items-module-thumbnail {
+    width: 56px;
+    height: 56px;
+  }
+}

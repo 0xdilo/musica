@@ -1,0 +1,34 @@
+directory: music/library
+library: data/beets/library.db
+
+plugins:
+  - embedart
+  - fetchart
+  - musicbrainz
+
+import:
+  move: yes
+  write: yes
+  delete: no
+  quiet: yes
+  quiet_fallback: asis
+  resume: yes
+  incremental: no
+  log: logs/beets-import.log
+
+match:
+  strong_rec_thresh: 0.08
+
+paths:
+  default: Albums/$albumartist/$album%aunique{}/$track - $title
+  singleton: Tracks/$artist/$title
+
+fetchart:
+  auto: yes
+  cautious: yes
+  minwidth: 600
+  maxwidth: 1400
+
+embedart:
+  auto: yes
+  ifempty: no
