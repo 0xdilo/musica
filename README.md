@@ -4,7 +4,7 @@ A self-hosted music library with discovery radio, built on [Navidrome](https://g
 
 Play your playlists, discover music similar to them, or alternate the two. Save a discovery to download and import it into your own library without stopping playback.
 
-![Musica playlist view](docs/screenshots/playlist-desktop.png)
+![Musica album view](docs/screenshots/albums-desktop.png)
 
 ## What it does
 
@@ -19,11 +19,15 @@ The discovery controls are currently in Italian. The rest of Feishin retains its
 
 ## Screenshots
 
-![Discovery view](docs/screenshots/explore-desktop.png)
+![Playlist controls with real tracks](docs/screenshots/playlist-real-desktop.png)
 
-<img src="docs/screenshots/playlist-mobile.png" alt="Playlist controls on a phone" width="320">
+![Discovery view](docs/screenshots/explore-real-desktop.png)
 
-The screenshots use a separate demonstration library with fictional artists and generated audio. No personal collection or listening history is included. You can generate the same kind of fixtures with `uv run python scripts/make-demo-library.py /path/to/an/empty/folder`.
+<img src="docs/screenshots/playlist-real-mobile.png" alt="Playlist controls on a phone" width="320">
+
+Screenshots show a real installation with actual tracks and album artwork. Only screenshots are included; audio files, credentials and databases stay local. Album artwork belongs to its respective rights holders.
+
+For local test fixtures, `uv run python scripts/make-demo-library.py /path/to/an/empty/folder` generates silent audio with fictional metadata.
 
 ## Run locally
 
