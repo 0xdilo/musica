@@ -472,19 +472,23 @@ index 9795ddb..59513ca 100644
              }
          }
 diff --git a/src/renderer/features/player/components/audio-players.tsx b/src/renderer/features/player/components/audio-players.tsx
-index 17e98fc..1243abc 100644
+index 17e98fc..69f3940 100644
 --- a/src/renderer/features/player/components/audio-players.tsx
 +++ b/src/renderer/features/player/components/audio-players.tsx
-@@ -4,6 +4,8 @@ import { useEffect } from 'react';
+@@ -4,6 +4,12 @@ import { useEffect } from 'react';
  import { eventEmitter } from '/@/renderer/events/event-emitter';
  import { UserFavoriteEventPayload, UserRatingEventPayload } from '/@/renderer/events/events';
  import { DiscordRpcHook } from '/@/renderer/features/discord-rpc/use-discord-rpc';
 +import { useDiscoveryRadio } from '/@/renderer/features/explore/discovery-radio';
 +import { DiscoveryRadioHook } from '/@/renderer/features/explore/discovery-radio-player';
++import {
++    configurePlaybackSession,
++    usesNativeMobileAudio,
++} from '/@/renderer/features/player/audio-player/browser-audio';
  import { DlnaPlayer } from '/@/renderer/features/player/audio-player/dlna-player';
  import { MainPlayerListenerHook } from '/@/renderer/features/player/audio-player/hooks/use-main-player-listener';
  import { JukeboxPlayer } from '/@/renderer/features/player/audio-player/jukebox-player';
-@@ -117,6 +119,7 @@ function isSafari() {
+@@ -117,6 +123,7 @@ function isSafari() {
  }
  
  export const AudioPlayers = () => {
@@ -492,7 +496,16 @@ index 17e98fc..1243abc 100644
      const playbackType = usePlaybackType();
      const serverId = useCurrentServerId();
      const { resetSampleRate } = useSettingsStoreActions();
-@@ -132,7 +135,8 @@ export const AudioPlayers = () => {
+@@ -128,11 +135,17 @@ export const AudioPlayers = () => {
+     const { setWebAudio, webAudio: audioContext } = useWebAudio();
+     useEffect(() => {
+         detectBrowserProfile();
++        try {
++            configurePlaybackSession(navigator);
++        } catch (error) {
++            logger.warn('Could not configure the browser playback audio session', { error });
++        }
+     }, []);
      return (
          <>
              <SleepTimerHook />
@@ -502,7 +515,7 @@ index 17e98fc..1243abc 100644
              <PowerSaveBlockerHook />
              <DiscordRpcHook />
              <MPRISHook />
-@@ -144,7 +148,7 @@ export const AudioPlayers = () => {
+@@ -144,7 +157,7 @@ export const AudioPlayers = () => {
              <RemoteQueuePushHook />
              <RemoteRadioPushHook />
              <RemoteSettingsPushHook />
@@ -511,6 +524,20 @@ index 17e98fc..1243abc 100644
              <QueueRestoreTimestampHook />
              <InitialTimestampRestoreHook />
              <UpdateCurrentSongHook />
+@@ -208,7 +221,12 @@ const AudioPlayersContent = ({
+     }, []);
+ 
+     useEffect(() => {
+-        if (playbackType !== PlayerType.WEB || !webAudio || !('AudioContext' in window)) {
++        if (
++            playbackType !== PlayerType.WEB ||
++            !webAudio ||
++            usesNativeMobileAudio(navigator) ||
++            !('AudioContext' in window)
++        ) {
+             return;
+         }
+ 
 diff --git a/src/renderer/features/player/context/player-context.tsx b/src/renderer/features/player/context/player-context.tsx
 index df6c464..b4a2695 100644
 --- a/src/renderer/features/player/context/player-context.tsx
@@ -552,31 +579,261 @@ index df6c464..b4a2695 100644
  
      return songs;
 diff --git a/src/renderer/features/player/hooks/use-media-session.ts b/src/renderer/features/player/hooks/use-media-session.ts
-index fdd70fb..e291c83 100644
+index fdd70fb..6fb834c 100644
 --- a/src/renderer/features/player/hooks/use-media-session.ts
 +++ b/src/renderer/features/player/hooks/use-media-session.ts
-@@ -3,6 +3,10 @@ import { debounce } from 'lodash';
+@@ -3,11 +3,18 @@ import { debounce } from 'lodash';
  import React, { useCallback, useEffect, useMemo, useRef } from 'react';
  
  import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 +import {
 +    nextDiscoveryTrack,
++    startDiscoveryRadio,
 +    useDiscoveryRadio,
 +} from '/@/renderer/features/explore/discovery-radio';
++import { setMediaSessionAction } from '/@/renderer/features/player/audio-player/browser-audio';
  import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
  import { usePlayer } from '/@/renderer/features/player/context/player-context';
  import {
-@@ -96,6 +100,10 @@ export const useMediaSession = () => {
+     useIsRadioActive,
+     useRadioPlayer,
++    useRadioStore,
+ } from '/@/renderer/features/radio/hooks/use-radio-player';
+ import {
+     subscribeCurrentTrack,
+@@ -66,6 +73,7 @@ export const useMediaSession = () => {
+     }, [stationName]);
+ 
+     const isMediaSessionEnabled = useMemo(() => {
++        if (!mediaSession) return false;
+         // Always enable media session on web
+         if (!isElectron()) {
+             return true;
+@@ -83,48 +91,58 @@ export const useMediaSession = () => {
+     // silently no-oping because the [] effect already ran.
+     useEffect(() => {
+         if (!isMediaSessionEnabled) {
+-            mediaSession.setActionHandler('nexttrack', null);
+-            mediaSession.setActionHandler('pause', null);
+-            mediaSession.setActionHandler('play', null);
+-            mediaSession.setActionHandler('previoustrack', null);
+-            mediaSession.setActionHandler('seekto', null);
+-            mediaSession.setActionHandler('stop', null);
+-            mediaSession.setActionHandler('seekbackward', null);
+-            mediaSession.setActionHandler('seekforward', null);
++            setMediaSessionAction(mediaSession, 'nexttrack', null);
++            setMediaSessionAction(mediaSession, 'pause', null);
++            setMediaSessionAction(mediaSession, 'play', null);
++            setMediaSessionAction(mediaSession, 'previoustrack', null);
++            setMediaSessionAction(mediaSession, 'seekto', null);
++            setMediaSessionAction(mediaSession, 'stop', null);
++            setMediaSessionAction(mediaSession, 'seekbackward', null);
++            setMediaSessionAction(mediaSession, 'seekforward', null);
+ 
+             return;
          }
  
-         mediaSession.setActionHandler('nexttrack', () => {
+-        mediaSession.setActionHandler('nexttrack', () => {
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++        setMediaSessionAction(mediaSession, 'nexttrack', () => {
 +            if (useDiscoveryRadio.getState().active) {
 +                void nextDiscoveryTrack();
 +                return;
 +            }
-             if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++            if (isRadioActiveRef.current) {
                  return;
              }
+ 
+             playerRef.current.mediaNext(false);
+         });
+ 
+-        mediaSession.setActionHandler('pause', () => {
+-            playerRef.current.mediaPause();
++        setMediaSessionAction(mediaSession, 'pause', () => {
++            if (useRadioStore.getState().currentStreamUrl) useRadioStore.getState().actions.pause();
++            else playerRef.current.mediaPause();
+         });
+ 
+-        mediaSession.setActionHandler('play', () => {
+-            playerRef.current.mediaPlay();
++        setMediaSessionAction(mediaSession, 'play', () => {
++            const discovery = useDiscoveryRadio.getState();
++            if (discovery.active && discovery.finished) {
++                void startDiscoveryRadio(discovery.serverId, discovery.context);
++            } else if (useRadioStore.getState().currentStreamUrl) {
++                useRadioStore.getState().actions.play();
++            } else playerRef.current.mediaPlay();
+         });
+ 
+-        mediaSession.setActionHandler('previoustrack', () => {
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++        setMediaSessionAction(mediaSession, 'previoustrack', () => {
++            if (isRadioActiveRef.current) {
+                 return;
+             }
+ 
+             playerRef.current.mediaPrevious(false);
+         });
+ 
+-        mediaSession.setActionHandler('seekto', (e) => {
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++        setMediaSessionAction(mediaSession, 'seekto', (e) => {
++            if (isRadioActiveRef.current) {
+                 return;
+             }
+ 
+-            if (e.seekTime) {
++            if (e.seekTime !== undefined) {
+                 playerRef.current.mediaSeekToTimestamp(e.seekTime);
+             } else if (e.seekOffset) {
+                 const currentTimestamp = useTimestampStoreBase.getState().timestamp;
+@@ -132,12 +150,13 @@ export const useMediaSession = () => {
+             }
+         });
+ 
+-        mediaSession.setActionHandler('stop', () => {
+-            playerRef.current.mediaStop();
++        setMediaSessionAction(mediaSession, 'stop', () => {
++            if (useRadioStore.getState().currentStreamUrl) useRadioStore.getState().actions.stop();
++            else playerRef.current.mediaStop();
+         });
+ 
+-        mediaSession.setActionHandler('seekbackward', (e) => {
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++        setMediaSessionAction(mediaSession, 'seekbackward', (e) => {
++            if (isRadioActiveRef.current) {
+                 return;
+             }
+ 
+@@ -147,8 +166,8 @@ export const useMediaSession = () => {
+             );
+         });
+ 
+-        mediaSession.setActionHandler('seekforward', (e) => {
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++        setMediaSessionAction(mediaSession, 'seekforward', (e) => {
++            if (isRadioActiveRef.current) {
+                 return;
+             }
+ 
+@@ -159,33 +178,42 @@ export const useMediaSession = () => {
+         });
+ 
+         return () => {
+-            mediaSession.setActionHandler('nexttrack', null);
+-            mediaSession.setActionHandler('pause', null);
+-            mediaSession.setActionHandler('play', null);
+-            mediaSession.setActionHandler('previoustrack', null);
+-            mediaSession.setActionHandler('seekto', null);
+-            mediaSession.setActionHandler('stop', null);
+-            mediaSession.setActionHandler('seekbackward', null);
+-            mediaSession.setActionHandler('seekforward', null);
++            setMediaSessionAction(mediaSession, 'nexttrack', null);
++            setMediaSessionAction(mediaSession, 'pause', null);
++            setMediaSessionAction(mediaSession, 'play', null);
++            setMediaSessionAction(mediaSession, 'previoustrack', null);
++            setMediaSessionAction(mediaSession, 'seekto', null);
++            setMediaSessionAction(mediaSession, 'stop', null);
++            setMediaSessionAction(mediaSession, 'seekbackward', null);
++            setMediaSessionAction(mediaSession, 'seekforward', null);
+         };
+     }, [isMediaSessionEnabled]);
+ 
+     const updateMediaSessionMetadata = useCallback(
+         (song: QueueSong | undefined) => {
+             // Read from ref so this callback is never stale regardless of when it was created
+-            if (!isMediaSessionEnabledRef.current) {
++            if (!isMediaSessionEnabledRef.current || !('MediaMetadata' in window)) {
+                 return;
+             }
+ 
+             // Handle radio metadata when radio is active and playing
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++            if (isRadioActiveRef.current) {
+                 const title = radioMetadataRef.current?.title || stationNameRef.current || 'Radio';
+                 const artist = radioMetadataRef.current?.artist || stationNameRef.current || '';
+ 
++                const recording = useDiscoveryRadio.getState().current;
++                const image =
++                    recording?.libraryIndex !== undefined
++                        ? getItemImageUrl({
++                              id: recording.track.song_id,
++                              itemType: LibraryItem.SONG,
++                              type: 'itemCard',
++                          })
++                        : undefined;
+                 mediaSession.metadata = new MediaMetadata({
+                     album: stationNameRef.current || '',
+                     artist: artist,
+-                    artwork: [],
++                    artwork: image ? [{ src: image }] : [],
+                     title: title,
+                 });
+                 return;
+@@ -206,7 +234,7 @@ export const useMediaSession = () => {
+             mediaSession.metadata = new MediaMetadata({
+                 album: song?.album ?? '',
+                 artist: song?.artistName ?? '',
+-                artwork: imageUrl ? [{ src: imageUrl, type: 'image/png' }] : [],
++                artwork: imageUrl ? [{ src: imageUrl }] : [],
+                 title: song?.name ?? '',
+             });
+         },
+@@ -236,10 +264,22 @@ export const useMediaSession = () => {
+             return;
+         }
+ 
+-        if (isRadioActiveRef.current && isRadioPlayingRef.current) {
+-            debouncedUpdateMetadata(undefined);
+-        }
+-    }, [radioMetadata, isRadioPlaying, isMediaSessionEnabled, debouncedUpdateMetadata]);
++        debouncedUpdateMetadata(usePlayerStore.getState().getCurrentSong());
++        const status = usePlayerStore.getState().player.status;
++        mediaSession.playbackState = isRadioActive
++            ? isRadioPlaying
++                ? 'playing'
++                : 'paused'
++            : status === PlayerStatus.PLAYING
++              ? 'playing'
++              : 'paused';
++    }, [
++        radioMetadata,
++        isRadioActive,
++        isRadioPlaying,
++        isMediaSessionEnabled,
++        debouncedUpdateMetadata,
++    ]);
+ 
+     // Subscribe directly to the player store instead of using usePlayerEvents.
+     // usePlayerEvents receives inline handler objects that cause it to re-subscribe on every
+@@ -252,7 +292,7 @@ export const useMediaSession = () => {
+                 return;
+             }
+ 
+-            if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++            if (isRadioActiveRef.current) {
+                 return;
+             }
+ 
+@@ -264,7 +304,8 @@ export const useMediaSession = () => {
+                 return;
+             }
+ 
+-            mediaSession.playbackState = status === PlayerStatus.PLAYING ? 'playing' : 'paused';
++            if (!isRadioActiveRef.current)
++                mediaSession.playbackState = status === PlayerStatus.PLAYING ? 'playing' : 'paused';
+         });
+ 
+         return () => {
+@@ -283,7 +324,7 @@ export const useMediaSession = () => {
+                     return;
+                 }
+ 
+-                if (isRadioActiveRef.current && isRadioPlayingRef.current) {
++                if (isRadioActiveRef.current) {
+                     return;
+                 }
+ 
 diff --git a/src/renderer/features/player/hooks/use-scrobble.ts b/src/renderer/features/player/hooks/use-scrobble.ts
 index a3d8b58..5f0a0f9 100644
 --- a/src/renderer/features/player/hooks/use-scrobble.ts
@@ -7255,6 +7512,111 @@ index 0000000..362461b
 +    const french = await extraLocales.fr();
 +    expect(Object.keys(french.default).length).toBeGreaterThan(10);
 +});
+diff --git a/src/renderer/features/player/audio-player/browser-audio.test.ts b/src/renderer/features/player/audio-player/browser-audio.test.ts
+new file mode 100644
+index 0000000..3acac58
+--- /dev/null
++++ b/src/renderer/features/player/audio-player/browser-audio.test.ts
+@@ -0,0 +1,65 @@
++import { expect, test } from 'bun:test';
++
++import {
++    configurePlaybackSession,
++    setMediaSessionAction,
++    usesNativeMobileAudio,
++} from './browser-audio';
++
++test('iPhone and desktop-mode iPad use direct media playback while desktop and Android keep DSP', () => {
++    expect(
++        usesNativeMobileAudio({
++            maxTouchPoints: 5,
++            platform: 'iPhone',
++            userAgent: 'Mozilla/5.0 (iPhone) Safari',
++        }),
++    ).toBe(true);
++    expect(
++        usesNativeMobileAudio({
++            maxTouchPoints: 5,
++            platform: 'MacIntel',
++            userAgent: 'Mozilla/5.0 Macintosh Safari',
++        }),
++    ).toBe(true);
++    expect(
++        usesNativeMobileAudio({
++            maxTouchPoints: 0,
++            platform: 'MacIntel',
++            userAgent: 'Mozilla/5.0 Macintosh Safari',
++        }),
++    ).toBe(false);
++    expect(
++        usesNativeMobileAudio({
++            maxTouchPoints: 5,
++            platform: 'Linux arm',
++            userAgent: 'Mozilla/5.0 Android Chrome',
++        }),
++    ).toBe(false);
++});
++
++test('the optional browser audio session is configured for playback', () => {
++    const target = Object.create(navigator);
++    target.audioSession = { type: 'ambient' };
++    expect(configurePlaybackSession(target)).toBe(true);
++    expect(target.audioSession.type).toBe('playback');
++    expect(configurePlaybackSession(navigator)).toBe(false);
++});
++
++test('unsupported media actions do not prevent play and pause registration; other errors propagate', () => {
++    const calls: string[] = [];
++    const session = {
++        setActionHandler: (action: MediaSessionAction) => {
++            if (action === 'seekto') throw new DOMException('Unsupported', 'NotSupportedError');
++            calls.push(action);
++        },
++    } satisfies Pick<MediaSession, 'setActionHandler'>;
++    expect(setMediaSessionAction(session, 'seekto', null)).toBe(false);
++    expect(setMediaSessionAction(session, 'play', () => {})).toBe(true);
++    expect(setMediaSessionAction(session, 'pause', () => {})).toBe(true);
++    expect(calls).toEqual(['play', 'pause']);
++    expect(setMediaSessionAction(undefined, 'play', null)).toBe(false);
++    session.setActionHandler = () => {
++        throw new Error('Unexpected failure');
++    };
++    expect(() => setMediaSessionAction(session, 'play', null)).toThrow('Unexpected failure');
++});
+diff --git a/src/renderer/features/player/audio-player/browser-audio.ts b/src/renderer/features/player/audio-player/browser-audio.ts
+new file mode 100644
+index 0000000..4355ac2
+--- /dev/null
++++ b/src/renderer/features/player/audio-player/browser-audio.ts
+@@ -0,0 +1,28 @@
++type AudioDevice = { maxTouchPoints: number; platform: string; userAgent: string };
++
++export const usesNativeMobileAudio = (device: AudioDevice): boolean =>
++    /iPad|iPhone|iPod/.test(device.userAgent) ||
++    (device.platform === 'MacIntel' && device.maxTouchPoints > 1);
++
++export const configurePlaybackSession = (target: Navigator): boolean => {
++    if (!('audioSession' in target)) return false;
++    const session = target.audioSession;
++    if (!session || typeof session !== 'object' || !('type' in session)) return false;
++    session.type = 'playback';
++    return true;
++};
++
++export const setMediaSessionAction = (
++    session: Pick<MediaSession, 'setActionHandler'> | undefined,
++    action: MediaSessionAction,
++    handler: MediaSessionActionHandler | null,
++): boolean => {
++    if (!session) return false;
++    try {
++        session.setActionHandler(action, handler);
++        return true;
++    } catch (error) {
++        if (error instanceof DOMException && error.name === 'NotSupportedError') return false;
++        throw error;
++    }
++};
 diff --git a/src/renderer/features/tag-editor/utils/tag-properties.LICENSE b/src/renderer/features/tag-editor/utils/tag-properties.LICENSE
 new file mode 100644
 index 0000000..2ddb270

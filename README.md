@@ -84,6 +84,10 @@ sudo apt install git ffmpeg libchromaprint-tools librsvg2-bin
 
 Place music you already have in `music/library/` and scan it in Navidrome, or use the import command below. An empty library can play genre discoveries once Last.fm is configured; recommendations based on favourites or playlists need seed tracks.
 
+### Phone playback
+
+Start playback in the page before locking the phone. System media controls follow the active library track or discovery radio. On iPhone and iPad, playback uses the native audio element, bypassing browser EQ and compression, and requests the playback audio session when supported. Background playback still needs validation on the target phone and browser; desktop emulation cannot confirm lock-screen behavior.
+
 ### Enable new-music discovery
 
 Create your own free [Last.fm API key](https://www.last.fm/api/account/create), set `LASTFM_API_KEY` in `.env`, and restart the player and save worker. There is no shared key in the repository.
