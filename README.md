@@ -21,9 +21,10 @@ The discovery controls are currently in Italian. The rest of Feishin retains its
 
 ![Playlist controls with real tracks](docs/screenshots/playlist-real-desktop.png)
 
-![Discovery view](docs/screenshots/explore-real-desktop.png)
+![Discovery view](docs/screenshots/explore-native-desktop.png)
 
-<img src="docs/screenshots/playlist-real-mobile.png" alt="Playlist controls on a phone" width="320">
+<img src="docs/screenshots/playlist-top-menu-mobile.png" alt="Playlist controls on a phone" width="320">
+<img src="docs/screenshots/explore-native-mobile.png" alt="Discovery and saved tracks on a phone" width="320">
 
 Screenshots show a real installation with actual tracks and album artwork. Only screenshots are included; audio files, credentials and databases stay local. Album artwork belongs to its respective rights holders.
 

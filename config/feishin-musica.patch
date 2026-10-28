@@ -359,6 +359,20 @@ index ae1456a..c36407c 100644
      localSettings?.passwordRemove(serverId);
  
      // logout() clears credentials on the server list entry and sets currentServer to null.
+diff --git a/src/renderer/components/page-header/page-header.module.css b/src/renderer/components/page-header/page-header.module.css
+index 5448a2b..b3c1da9 100644
+--- a/src/renderer/components/page-header/page-header.module.css
++++ b/src/renderer/components/page-header/page-header.module.css
+@@ -103,3 +103,9 @@
+ .title-wrapper.hidden {
+     display: none;
+ }
++
++@media (width <= 768px) {
++    .title-wrapper {
++        padding-left: 56px;
++    }
++}
 diff --git a/src/renderer/features/favorites/components/favorites-header.tsx b/src/renderer/features/favorites/components/favorites-header.tsx
 index 0d0f132..552f118 100644
 --- a/src/renderer/features/favorites/components/favorites-header.tsx
@@ -497,6 +511,46 @@ index 17e98fc..1243abc 100644
              <QueueRestoreTimestampHook />
              <InitialTimestampRestoreHook />
              <UpdateCurrentSongHook />
+diff --git a/src/renderer/features/player/context/player-context.tsx b/src/renderer/features/player/context/player-context.tsx
+index df6c464..b4a2695 100644
+--- a/src/renderer/features/player/context/player-context.tsx
++++ b/src/renderer/features/player/context/player-context.tsx
+@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid/non-secure';
+ import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
++import { api } from '/@/renderer/api';
+ import { queryKeys } from '/@/renderer/api/query-keys';
+ import { albumQueries } from '/@/renderer/features/albums/api/album-api';
+ import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
+@@ -980,7 +981,6 @@ export async function fetchSongsByItemType(
+             songs.push(...albumSongsResponse.items);
+             break;
+         }
+-
+         case LibraryItem.ALBUM_ARTIST: {
+             const albumArtistSongsResponse = await getAlbumArtistSongsById({
+                 id: args.id,
+@@ -1043,6 +1043,19 @@ export async function fetchSongsByItemType(
+             songs.push(...results.flatMap((r) => r.items));
+             break;
+         }
++
++        case LibraryItem.SONG: {
++            const details = await Promise.all(
++                args.id.map((id) =>
++                    api.controller.getSongDetail({
++                        apiClientProps: { serverId },
++                        query: { id },
++                    }),
++                ),
++            );
++            songs.push(...details);
++            break;
++        }
+     }
+ 
+     return songs;
 diff --git a/src/renderer/features/player/hooks/use-media-session.ts b/src/renderer/features/player/hooks/use-media-session.ts
 index fdd70fb..e291c83 100644
 --- a/src/renderer/features/player/hooks/use-media-session.ts
@@ -1170,8 +1224,31 @@ index 2828864..a42b50e 100644
          </div>
      );
  };
+diff --git a/src/renderer/layouts/mobile-layout/mobile-layout.module.css b/src/renderer/layouts/mobile-layout/mobile-layout.module.css
+index 2614dc7..9a20fe1 100644
+--- a/src/renderer/layouts/mobile-layout/mobile-layout.module.css
++++ b/src/renderer/layouts/mobile-layout/mobile-layout.module.css
+@@ -24,12 +24,12 @@
+ 
+ .drawer-button {
+     position: absolute;
+-    bottom: calc(90px + 0.75rem);
+-    left: 0.75rem;
+-    z-index: 100;
+-    background: color-mix(in srgb, var(--theme-colors-background) 90%, transparent);
+-    border: 1px solid var(--theme-colors-border);
+-    backdrop-filter: blur(10px);
++    top: max(0.5rem, env(safe-area-inset-top));
++    left: 0.5rem;
++    z-index: 195;
++    width: 44px;
++    height: 44px;
++    background: var(--theme-colors-background);
+ }
+ 
+ @media (height < 192px) {
 diff --git a/src/renderer/layouts/mobile-layout/mobile-layout.tsx b/src/renderer/layouts/mobile-layout/mobile-layout.tsx
-index 923a60e..8b6338e 100644
+index 923a60e..e59b788 100644
 --- a/src/renderer/layouts/mobile-layout/mobile-layout.tsx
 +++ b/src/renderer/layouts/mobile-layout/mobile-layout.tsx
 @@ -1,7 +1,7 @@
@@ -1193,6 +1270,14 @@ index 923a60e..8b6338e 100644
  
      return (
          <>
+@@ -42,6 +44,7 @@ export const MobileLayout = ({ shell }: MobileLayoutProps) => {
+                 {!shell && <WindowBar />}
+                 {!shell && (
+                     <ActionIcon
++                        aria-label="Apri menu"
+                         className={styles.drawerButton}
+                         icon="menu"
+                         onClick={openSidebar}
 diff --git a/src/renderer/layouts/window-bar.tsx b/src/renderer/layouts/window-bar.tsx
 index f196376..c006566 100644
 --- a/src/renderer/layouts/window-bar.tsx
@@ -5797,13 +5882,13 @@ index 0000000..ad66ce8
 +};
 diff --git a/src/renderer/features/explore/explore-route.tsx b/src/renderer/features/explore/explore-route.tsx
 new file mode 100644
-index 0000000..418ee30
+index 0000000..f705232
 --- /dev/null
 +++ b/src/renderer/features/explore/explore-route.tsx
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,423 @@
 +import { useQuery } from '@tanstack/react-query';
 +import { useEffect, useRef, useState } from 'react';
-+import { Link } from 'react-router';
++import { generatePath, Link } from 'react-router';
 +
 +import { exploreQueries, fetchRadio } from './explore-api';
 +import styles from './explore.module.css';
@@ -5817,10 +5902,13 @@ index 0000000..418ee30
 +import { AnimatedPage } from '/@/renderer/features/shared/components/animated-page';
 +import { AppRoute } from '/@/renderer/router/routes';
 +import { useCurrentServerId } from '/@/renderer/store';
++import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 +import { Button } from '/@/shared/components/button/button';
 +import { Group } from '/@/shared/components/group/group';
 +import { Icon } from '/@/shared/components/icon/icon';
++import { Select } from '/@/shared/components/select/select';
 +import { Stack } from '/@/shared/components/stack/stack';
++import { Tabs } from '/@/shared/components/tabs/tabs';
 +import { TextInput } from '/@/shared/components/text-input/text-input';
 +import { LibraryItem, type Song } from '/@/shared/types/domain-types';
 +import { Play } from '/@/shared/types/types';
@@ -5931,264 +6019,289 @@ index 0000000..418ee30
 +    return (
 +        <AnimatedPage>
 +            <NativeScrollArea noHeader>
-+                <Stack className={styles.page} gap="2rem">
-+                    <NewMusic serverId={serverId} />
-+                    <section className={styles.hero}>
-+                        <p className={styles.eyebrow}>LA TUA LIBRERIA, DA SCOPRIRE</p>
-+                        <h1>Riscopri la tua libreria.</h1>
-+                        <p className={styles.intro}>
-+                            Scegli un genere, parti dai tuoi gusti o descrivi cosa vuoi sentire.
-+                        </p>
-+                        <form
-+                            className={styles.search}
-+                            onSubmit={(event) => {
-+                                event.preventDefault();
-+                                void search('text');
-+                            }}
-+                        >
-+                            <TextInput
-+                                aria-label="Descrivi la musica"
-+                                maxLength={240}
-+                                onChange={(event) => setQuery(event.currentTarget.value)}
-+                                placeholder="Ambient malinconico, piano, chitarre distorte…"
++                <Stack className={styles.page} gap="md">
++                    <header className={styles.pageHeading}>
++                        <h1>Esplora</h1>
++                        <Group gap="xs">
++                            <ActionIcon
++                                aria-label="Radio live"
++                                component={Link}
++                                icon="radio"
 +                                size="lg"
-+                                value={query}
++                                to={AppRoute.RADIO}
++                                tooltip={{ label: 'Radio live' }}
++                                variant="subtle"
 +                            />
-+                            <Button
-+                                disabled={query.trim().length < 2}
-+                                loading={loading}
++                            <ActionIcon
++                                aria-label="Cerca musica"
++                                component={Link}
++                                icon="search"
 +                                size="lg"
-+                                type="submit"
-+                                variant="filled"
++                                to={generatePath(AppRoute.SEARCH, { itemType: LibraryItem.SONG })}
++                                tooltip={{ label: 'Cerca musica' }}
++                                variant="subtle"
++                            />
++                        </Group>
++                    </header>
++                    <Tabs defaultValue="discover" h="auto">
++                        <Tabs.List className={styles.exploreTabs}>
++                            <Tabs.Tab value="discover">Nuova musica</Tabs.Tab>
++                            <Tabs.Tab value="library">La tua libreria</Tabs.Tab>
++                        </Tabs.List>
++                        <Tabs.Panel value="discover">
++                            <NewMusic serverId={serverId} />
++                        </Tabs.Panel>
++                        <Tabs.Panel value="library">
++                            <form
++                                className={styles.search}
++                                onSubmit={(event) => {
++                                    event.preventDefault();
++                                    void search('text');
++                                }}
 +                            >
-+                                Crea radio
-+                            </Button>
-+                        </form>
-+                        <div className={styles.options}>
-+                            <fieldset className={styles.variety}>
-+                                <legend>Selezione</legend>
-+                                <button
-+                                    aria-pressed={variety === 'focused'}
-+                                    onClick={() => setVariety('focused')}
-+                                    type="button"
++                                <TextInput
++                                    aria-label="Descrivi la musica"
++                                    maxLength={240}
++                                    onChange={(event) => setQuery(event.currentTarget.value)}
++                                    placeholder="Artista, genere o atmosfera"
++                                    value={query}
++                                />
++                                <Button
++                                    disabled={query.trim().length < 2}
++                                    leftSection={<Icon icon="search" />}
++                                    loading={loading}
++                                    type="submit"
++                                    variant="filled"
 +                                >
-+                                    Più vicina
-+                                </button>
-+                                <button
-+                                    aria-pressed={variety === 'varied'}
-+                                    onClick={() => setVariety('varied')}
-+                                    type="button"
++                                    Cerca
++                                </Button>
++                            </form>
++                            <div className={styles.libraryActions}>
++                                <Button
++                                    leftSection={<Icon icon="favorite" />}
++                                    onClick={() => void search('personal')}
++                                    variant="subtle"
 +                                >
-+                                    Più varia
-+                                </button>
-+                            </fieldset>
-+                            <label className={styles.checkbox}>
-+                                <input
-+                                    checked={avoidRecent}
-+                                    onChange={(event) =>
-+                                        setAvoidRecent(event.currentTarget.checked)
++                                    Dai preferiti
++                                </Button>
++                                <Button
++                                    leftSection={<Icon icon="lastPlayed" />}
++                                    onClick={() => void search('forgotten')}
++                                    variant="subtle"
++                                >
++                                    Da riscoprire
++                                </Button>
++                                <Select
++                                    aria-label="Genere nella libreria"
++                                    clearable
++                                    data={
++                                        overview.data?.genres.map((genre) => ({
++                                            label: `${genre.name} · ${genre.count}`,
++                                            value: genre.name,
++                                        })) || []
 +                                    }
-+                                    type="checkbox"
-+                                />{' '}
-+                                Evita le ultime 24 ore
-+                            </label>
-+                        </div>
-+                    </section>
-+                    <div className={styles.shortcuts}>
-+                        <button
-+                            className={styles.personal}
-+                            onClick={() => void search('personal')}
-+                            type="button"
-+                        >
-+                            <Icon icon="favorite" size="xl" />
-+                            <strong>La tua radio</strong>
-+                            <span>Parte da un tuo preferito e segue quel suono.</span>
-+                        </button>
-+                        <button
-+                            className={styles.forgotten}
-+                            onClick={() => void search('forgotten')}
-+                            type="button"
-+                        >
-+                            <Icon icon="mediaShuffle" size="xl" />
-+                            <strong>Da riscoprire</strong>
-+                            <span>Brani mai ascoltati o lasciati indietro.</span>
-+                        </button>
-+                        <Link className={styles.live} to={AppRoute.RADIO}>
-+                            <Icon icon="radio" size="xl" />
-+                            <strong>Radio dal vivo</strong>
-+                            <span>Nuova musica, anche fuori dalla tua libreria.</span>
-+                        </Link>
-+                    </div>
-+                    <section aria-label="Generi" className={styles.genreSection}>
-+                        <h2>Trova il tuo genere</h2>
-+                        <p>Radio dalla tua libreria. Nuova selezione a ogni giro.</p>
-+                        {overview.isPending && <p role="status">Caricamento dei generi…</p>}
-+                        {overview.isError && (
-+                            <Button onClick={() => void overview.refetch()}>
-+                                Ricarica i generi
-+                            </Button>
-+                        )}
-+                        <div className={styles.genres}>
-+                            {overview.data?.genres.map((genre) => (
-+                                <button
-+                                    key={genre.name}
-+                                    onClick={() => {
-+                                        setQuery(genre.name);
-+                                        void search('genre', genre.name);
++                                    onChange={(value) => {
++                                        if (value) void search('genre', value);
 +                                    }}
-+                                    type="button"
-+                                >
-+                                    {genre.name}
-+                                    <span>{genre.count}</span>
-+                                </button>
-+                            ))}
-+                        </div>
-+                    </section>
-+                    <section
-+                        aria-busy={loading}
-+                        aria-label="Risultati"
-+                        className={styles.results}
-+                        ref={resultRef}
-+                    >
-+                        {loading && (
-+                            <p aria-live="polite" className={styles.notice} role="status">
-+                                Sto cercando il suono giusto nella tua musica…
-+                            </p>
-+                        )}
-+                        {error && (
-+                            <div className={styles.error} role="alert">
-+                                <p>{error}</p>
-+                                {lastRequest && (
++                                    placeholder={
++                                        overview.isPending ? 'Caricamento generi…' : 'Genere…'
++                                    }
++                                    searchable
++                                    value={lastRequest?.mode === 'genre' ? lastRequest.query : null}
++                                />
++                                {overview.isError && (
 +                                    <Button
-+                                        onClick={() =>
-+                                            void search(lastRequest.mode, lastRequest.query)
-+                                        }
++                                        onClick={() => void overview.refetch()}
++                                        variant="subtle"
 +                                    >
-+                                        Riprova
++                                        Ricarica generi
 +                                    </Button>
 +                                )}
 +                            </div>
-+                        )}
-+                        {result && (
-+                            <>
-+                                <Group justify="space-between">
-+                                    <div>
-+                                        <p className={styles.eyebrow}>PRONTA DA ASCOLTARE</p>
-+                                        <h2>{result.description}</h2>
-+                                        <p>
-+                                            {result.songs.length} brani
-+                                            {result.songs.length > 0 &&
-+                                                ' · selezionati dalla tua libreria'}
-+                                        </p>
-+                                    </div>
-+                                    {result.songs.length > 0 && (
-+                                        <Group gap="xs">
-+                                            <Button
-+                                                onClick={() => play(result.songs)}
-+                                                variant="filled"
-+                                            >
-+                                                Ascolta radio
-+                                            </Button>
-+                                            <Button onClick={() => play(result.songs, Play.LAST)}>
-+                                                Aggiungi in coda
-+                                            </Button>
-+                                        </Group>
-+                                    )}
-+                                </Group>
-+                                {result.songs.length === 0 && (
-+                                    <p className={styles.notice}>
-+                                        Nessun brano con questi criteri. Prova una descrizione più
-+                                        ampia o disattiva il filtro delle ultime 24 ore.
++                            <details className={styles.libraryOptions}>
++                                <summary>Opzioni</summary>
++                                <div className={styles.options}>
++                                    <Select
++                                        aria-label="Varietà della selezione"
++                                        data={[
++                                            { label: 'Più simile', value: 'focused' },
++                                            { label: 'Più varia', value: 'varied' },
++                                        ]}
++                                        onChange={(value) => {
++                                            if (value === 'focused' || value === 'varied')
++                                                setVariety(value);
++                                        }}
++                                        value={variety}
++                                    />
++                                    <label className={styles.checkbox}>
++                                        <input
++                                            checked={avoidRecent}
++                                            onChange={(event) =>
++                                                setAvoidRecent(event.currentTarget.checked)
++                                            }
++                                            type="checkbox"
++                                        />{' '}
++                                        Evita le ultime 24 ore
++                                    </label>
++                                </div>
++                            </details>
++                            <section
++                                aria-busy={loading}
++                                aria-label="Risultati"
++                                className={styles.results}
++                                ref={resultRef}
++                            >
++                                {loading && (
++                                    <p aria-live="polite" className={styles.notice} role="status">
++                                        Caricamento…
 +                                    </p>
 +                                )}
-+                                {lastRequest && (
-+                                    <Button
-+                                        onClick={() =>
-+                                            void search(lastRequest.mode, lastRequest.query)
-+                                        }
-+                                        variant="subtle"
-+                                    >
-+                                        Un altro giro
-+                                    </Button>
-+                                )}
-+                                <ol className={styles.tracks}>
-+                                    {result.songs.map((song, index) => (
-+                                        <li className={styles.track} key={song.id}>
-+                                            <button
-+                                                aria-label={`Ascolta ${song.name}`}
-+                                                className={styles.trackPlay}
-+                                                onClick={() => play(result.songs.slice(index))}
-+                                                type="button"
++                                {error && (
++                                    <div className={styles.error} role="alert">
++                                        <p>{error}</p>
++                                        {lastRequest && (
++                                            <Button
++                                                onClick={() =>
++                                                    void search(lastRequest.mode, lastRequest.query)
++                                                }
 +                                            >
-+                                                <div className={styles.cover}>
-+                                                    <ItemImage
-+                                                        id={song.imageId}
-+                                                        itemType={LibraryItem.SONG}
-+                                                        serverId={serverId}
-+                                                        type="table"
-+                                                    />
-+                                                </div>
-+                                                <div className={styles.trackText}>
-+                                                    <strong>{song.name}</strong>
-+                                                    <span>{song.artistName}</span>
-+                                                </div>
-+                                            </button>
-+                                            <details className={styles.trackMenu}>
-+                                                <summary aria-label={`Opzioni per ${song.name}`}>
-+                                                    •••
-+                                                </summary>
-+                                                <div>
-+                                                    <button
-+                                                        disabled={feedbackPending}
-+                                                        onClick={() => void exclude('tracks', song)}
-+                                                        type="button"
++                                                Riprova
++                                            </Button>
++                                        )}
++                                    </div>
++                                )}
++                                {result && (
++                                    <>
++                                        <Group justify="space-between">
++                                            <div>
++                                                <h2>{result.description}</h2>
++                                                <p>
++                                                    {result.songs.length} brani
++                                                    {result.songs.length > 0 &&
++                                                        ' · selezionati dalla tua libreria'}
++                                                </p>
++                                            </div>
++                                            {result.songs.length > 0 && (
++                                                <Group gap="xs">
++                                                    <Button
++                                                        onClick={() => play(result.songs)}
++                                                        variant="filled"
 +                                                    >
-+                                                        Non proporre questo brano
-+                                                    </button>
-+                                                    <button
-+                                                        disabled={feedbackPending}
++                                                        Ascolta radio
++                                                    </Button>
++                                                    <Button
 +                                                        onClick={() =>
-+                                                            void exclude('artists', song)
++                                                            play(result.songs, Play.LAST)
++                                                        }
++                                                    >
++                                                        Aggiungi in coda
++                                                    </Button>
++                                                </Group>
++                                            )}
++                                        </Group>
++                                        {result.songs.length === 0 && (
++                                            <p className={styles.notice}>
++                                                Nessun brano con questi criteri. Prova una
++                                                descrizione più ampia o disattiva il filtro delle
++                                                ultime 24 ore.
++                                            </p>
++                                        )}
++                                        {lastRequest && (
++                                            <Button
++                                                onClick={() =>
++                                                    void search(lastRequest.mode, lastRequest.query)
++                                                }
++                                                variant="subtle"
++                                            >
++                                                Un altro giro
++                                            </Button>
++                                        )}
++                                        <ol className={styles.tracks}>
++                                            {result.songs.map((song, index) => (
++                                                <li className={styles.track} key={song.id}>
++                                                    <button
++                                                        aria-label={`Ascolta ${song.name}`}
++                                                        className={styles.trackPlay}
++                                                        onClick={() =>
++                                                            play(result.songs.slice(index))
 +                                                        }
 +                                                        type="button"
 +                                                    >
-+                                                        Non proporre questo artista
++                                                        <div className={styles.cover}>
++                                                            <ItemImage
++                                                                id={song.imageId}
++                                                                itemType={LibraryItem.SONG}
++                                                                serverId={serverId}
++                                                                type="table"
++                                                            />
++                                                        </div>
++                                                        <div className={styles.trackText}>
++                                                            <strong>{song.name}</strong>
++                                                            <span>{song.artistName}</span>
++                                                        </div>
 +                                                    </button>
-+                                                </div>
-+                                            </details>
-+                                        </li>
-+                                    ))}
-+                                </ol>
-+                            </>
-+                        )}
-+                    </section>
-+                    {exclusions &&
-+                        Object.values(exclusions).some(
-+                            (items) => Object.keys(items).length > 0,
-+                        ) && (
-+                            <details className={styles.exclusions}>
-+                                <summary>Esclusioni dai suggerimenti</summary>
-+                                <p>
-+                                    Valgono per Esplora e per le playlist automatiche, su tutti i
-+                                    tuoi dispositivi.
-+                                </p>
-+                                {(['tracks', 'artists'] as const).flatMap((kind) =>
-+                                    Object.entries(exclusions[kind]).map(([key, label]) => (
-+                                        <div key={`${kind}:${key}`}>
-+                                            <span>{label}</span>
-+                                            <Button
-+                                                disabled={feedbackPending}
-+                                                onClick={() => void restore(kind, key)}
-+                                                size="compact-sm"
-+                                                variant="subtle"
-+                                            >
-+                                                Ripristina
-+                                            </Button>
-+                                        </div>
-+                                    )),
++                                                    <details className={styles.trackMenu}>
++                                                        <summary
++                                                            aria-label={`Opzioni per ${song.name}`}
++                                                        >
++                                                            •••
++                                                        </summary>
++                                                        <div>
++                                                            <button
++                                                                disabled={feedbackPending}
++                                                                onClick={() =>
++                                                                    void exclude('tracks', song)
++                                                                }
++                                                                type="button"
++                                                            >
++                                                                Non proporre questo brano
++                                                            </button>
++                                                            <button
++                                                                disabled={feedbackPending}
++                                                                onClick={() =>
++                                                                    void exclude('artists', song)
++                                                                }
++                                                                type="button"
++                                                            >
++                                                                Non proporre questo artista
++                                                            </button>
++                                                        </div>
++                                                    </details>
++                                                </li>
++                                            ))}
++                                        </ol>
++                                    </>
 +                                )}
-+                            </details>
-+                        )}
++                            </section>
++                            {exclusions &&
++                                Object.values(exclusions).some(
++                                    (items) => Object.keys(items).length > 0,
++                                ) && (
++                                    <details className={styles.exclusions}>
++                                        <summary>Esclusioni dai suggerimenti</summary>
++                                        <p>
++                                            Valgono per Esplora e per le playlist automatiche, su
++                                            tutti i tuoi dispositivi.
++                                        </p>
++                                        {(['tracks', 'artists'] as const).flatMap((kind) =>
++                                            Object.entries(exclusions[kind]).map(([key, label]) => (
++                                                <div key={`${kind}:${key}`}>
++                                                    <span>{label}</span>
++                                                    <Button
++                                                        disabled={feedbackPending}
++                                                        onClick={() => void restore(kind, key)}
++                                                        size="compact-sm"
++                                                        variant="subtle"
++                                                    >
++                                                        Ripristina
++                                                    </Button>
++                                                </div>
++                                            )),
++                                        )}
++                                    </details>
++                                )}
++                        </Tabs.Panel>
++                    </Tabs>
 +                </Stack>
 +            </NativeScrollArea>
 +        </AnimatedPage>
@@ -6198,75 +6311,119 @@ index 0000000..418ee30
 +export default ExploreRoute;
 diff --git a/src/renderer/features/explore/explore.module.css b/src/renderer/features/explore/explore.module.css
 new file mode 100644
-index 0000000..b820655
+index 0000000..7e89bd7
 --- /dev/null
 +++ b/src/renderer/features/explore/explore.module.css
-@@ -0,0 +1,582 @@
+@@ -0,0 +1,454 @@
 +.page {
-+    width: min(100%, 1200px);
-+    padding: 4.5rem 2.5rem 8rem;
++    width: min(100%, 1120px);
++    padding: 1rem 1.5rem 6rem;
 +    margin: 0 auto;
 +}
 +
-+.new-radio-hero {
-+    padding: clamp(1.25rem, 4vw, 2.5rem);
-+    overflow-wrap: anywhere;
-+    background:
-+        radial-gradient(
-+            ellipse at 100% 0%,
-+            alpha(var(--theme-colors-primary), 0.18),
-+            transparent 65%
-+        ),
-+        alpha(var(--theme-colors-primary), 0.035);
-+    border: 1px solid alpha(var(--theme-colors-primary), 0.22);
-+    border-radius: 24px;
-+    box-shadow: 0 16px 48px #00000014;
++.page-heading {
++    position: sticky;
++    top: 0;
++    z-index: 190;
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    min-height: 44px;
++    background: var(--theme-colors-background);
 +}
 +
-+.new-radio-hero h2 {
-+    margin: 0 0 1rem;
-+    font-size: clamp(1.8rem, 4vw, 3rem);
-+    line-height: 1.15;
-+    letter-spacing: -0.04em;
++.explore-tabs {
++    position: sticky;
++    top: 50px;
++    z-index: 185;
++    background: var(--theme-colors-background);
 +}
 +
-+.radio-modes,
-+.radio-genres {
++.page-heading h1 {
++    margin: 0;
++    font-size: 1.75rem;
++    font-weight: 700;
++}
++
++.new-music {
++    padding-top: 0.5rem;
++}
++
++.radio-form {
++    display: grid;
++    grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
++    gap: 1rem;
++    max-width: 780px;
++}
++
++.radio-actions,
++.quick-genres,
++.library-actions {
 +    display: flex;
 +    flex-wrap: wrap;
 +    gap: 0.5rem;
++    align-items: center;
++    margin-top: 1rem;
++}
++
++.quick-genres {
++    gap: 0.25rem;
++    margin-top: 0.5rem;
++}
++
++.hint {
++    font-size: 0.8rem;
++    color: var(--theme-colors-foreground-muted);
++}
++
++.library-actions > :last-child {
++    max-width: 240px;
++}
++
++.library-options {
 +    margin: 1rem 0;
++    font-size: 0.85rem;
++    color: var(--theme-colors-foreground-muted);
 +}
 +
-+.radio-modes {
++.library-options summary,
++.saved-discoveries summary {
++    cursor: pointer;
++}
++
++.search {
 +    display: grid;
-+    grid-template-columns: repeat(4, minmax(0, 1fr));
-+    max-width: 650px;
++    grid-template-columns: minmax(0, 1fr) auto;
++    gap: 0.75rem;
 +}
 +
-+.radio-modes button,
-+.radio-genres button {
++.options {
++    display: flex;
++    flex-wrap: wrap;
++    gap: 1rem;
++    align-items: center;
++    margin-top: 1rem;
++}
++
++.checkbox {
 +    display: flex;
 +    gap: 0.5rem;
 +    align-items: center;
-+    justify-content: center;
-+    min-height: 44px;
-+    padding: 0.5rem 0.9rem;
-+    font: inherit;
-+    color: inherit;
-+    cursor: pointer;
-+    background: alpha(var(--theme-colors-foreground), 0.025);
-+    border: 1px solid alpha(var(--theme-colors-foreground), 0.12);
-+    border-radius: 12px;
-+    transition:
-+        background 150ms,
-+        border-color 150ms;
++    font-size: 0.8rem;
 +}
 +
-+.radio-modes button:hover,
-+.radio-genres button:hover {
-+    background: alpha(var(--theme-colors-primary), 0.14);
-+    border-color: alpha(var(--theme-colors-primary), 0.6);
++.checkbox input {
++    width: 16px;
++    height: 16px;
++    accent-color: var(--theme-colors-primary);
++}
++
++.results {
++    scroll-margin-top: 4rem;
++}
++
++.results h2 {
++    font-size: 1.2rem;
 +}
 +
 +.page button:focus-visible,
@@ -6276,16 +6433,50 @@ index 0000000..b820655
 +    outline-offset: 3px;
 +}
 +
-+.radio-modes button[aria-pressed='true'] {
-+    font-weight: 700;
-+    color: var(--theme-colors-primary);
-+    background: alpha(var(--theme-colors-primary), 0.2);
-+    border-color: var(--theme-colors-primary);
++.home-hero h2 {
++    margin: 0 0 0.5rem;
++    font-size: 1.4rem;
++    line-height: 1.3;
 +}
 +
-+.radio-source {
-+    max-width: 650px;
-+    margin: 1.25rem 0;
++.home-hero p {
++    font-size: 0.85rem;
++    line-height: 1.6;
++    opacity: 0.75;
++}
++
++@media (width <= 768px) {
++    .page {
++        padding: 0.5rem 1rem 6rem;
++    }
++
++    .page-heading {
++        top: 0.5rem;
++        padding-left: 44px;
++    }
++
++    .explore-tabs {
++        top: 58px;
++    }
++
++    .radio-form {
++        grid-template-columns: minmax(0, 1fr);
++    }
++
++    .page button,
++    .page input,
++    .page summary {
++        min-height: 44px;
++    }
++
++    .hint {
++        flex-basis: 100%;
++        margin-top: 0.25rem;
++    }
++
++    .home-hero {
++        padding: 1.25rem;
++    }
 +}
 +
 +.saved-discoveries {
@@ -6360,10 +6551,6 @@ index 0000000..b820655
 +}
 +
 +@media (width <= 600px) {
-+    .radio-modes {
-+        grid-template-columns: repeat(2, minmax(0, 1fr));
-+    }
-+
 +    .discovery-player {
 +        gap: 0.35rem;
 +        padding: 0.5rem;
@@ -6392,181 +6579,6 @@ index 0000000..b820655
 +    .discovery-now small {
 +        font-size: 0.65rem;
 +    }
-+}
-+
-+.hero {
-+    padding: 2rem;
-+    background: alpha(var(--theme-colors-foreground), 0.02);
-+    border: 1px solid alpha(var(--theme-colors-primary), 0.16);
-+    border-radius: 24px;
-+}
-+
-+.eyebrow {
-+    margin: 0 0 0.8rem;
-+    font-size: 0.7rem;
-+    font-weight: 700;
-+    color: var(--theme-colors-primary);
-+    letter-spacing: 0.16em;
-+}
-+
-+.hero h1 {
-+    margin: 0;
-+    font-size: clamp(1.65rem, 3vw, 2.2rem);
-+    font-weight: 750;
-+    line-height: 1.1;
-+    letter-spacing: -0.045em;
-+}
-+
-+.intro {
-+    margin: 1rem 0 1.8rem;
-+    color: var(--theme-colors-foreground-muted);
-+}
-+
-+.search {
-+    display: grid;
-+    grid-template-columns: minmax(0, 1fr) auto;
-+    gap: 0.75rem;
-+}
-+
-+.options {
-+    display: flex;
-+    flex-wrap: wrap;
-+    gap: 1rem 2rem;
-+    align-items: center;
-+    margin-top: 1rem;
-+}
-+
-+.variety {
-+    display: flex;
-+    gap: 4px;
-+    padding: 0;
-+    border: 0;
-+}
-+
-+.variety legend {
-+    position: absolute;
-+    width: 1px;
-+    height: 1px;
-+    overflow: hidden;
-+    clip-path: inset(50%);
-+}
-+
-+.variety button,
-+.genres button {
-+    padding: 0.6rem 1rem;
-+    font: inherit;
-+    color: inherit;
-+    cursor: pointer;
-+    background: var(--theme-colors-surface);
-+    border: 1px solid alpha(var(--theme-colors-foreground), 0.12);
-+    border-radius: 24px;
-+}
-+
-+.variety button[aria-pressed='true'] {
-+    color: var(--theme-colors-primary);
-+    background: alpha(var(--theme-colors-primary), 0.1);
-+    border-color: alpha(var(--theme-colors-primary), 0.6);
-+}
-+
-+.checkbox {
-+    display: flex;
-+    gap: 0.5rem;
-+    align-items: center;
-+    font-size: 0.8rem;
-+}
-+
-+.checkbox input {
-+    width: 16px;
-+    height: 16px;
-+    accent-color: var(--theme-colors-primary);
-+}
-+
-+.shortcuts {
-+    display: grid;
-+    grid-template-columns: repeat(3, minmax(0, 1fr));
-+    gap: 1rem;
-+}
-+
-+.shortcuts > * {
-+    display: flex;
-+    flex-direction: column;
-+    gap: 0.65rem;
-+    align-items: flex-start;
-+    padding: 1.5rem;
-+    font: inherit;
-+    color: inherit;
-+    text-align: left;
-+    text-decoration: none;
-+    cursor: pointer;
-+    border: 1px solid alpha(var(--theme-colors-foreground), 0.1);
-+    border-radius: 16px;
-+    transition:
-+        border-color 150ms,
-+        transform 150ms;
-+}
-+
-+.shortcuts > *:hover {
-+    border-color: var(--theme-colors-primary);
-+    transform: translateY(-2px);
-+}
-+
-+.personal {
-+    background: linear-gradient(
-+        130deg,
-+        alpha(var(--theme-colors-primary), 0.18),
-+        alpha(var(--theme-colors-primary), 0.04)
-+    );
-+}
-+
-+.forgotten {
-+    background: linear-gradient(130deg, #34304f, #211f2e);
-+}
-+
-+.live {
-+    background: linear-gradient(130deg, #473528, #2c231d);
-+}
-+
-+.shortcuts strong {
-+    font-size: 1.15rem;
-+}
-+
-+.shortcuts span,
-+.genre-section > p,
-+.results p,
-+.home-hero p {
-+    font-size: 0.85rem;
-+    line-height: 1.6;
-+    opacity: 0.75;
-+}
-+
-+.genre-section h2,
-+.results h2,
-+.home-hero h2 {
-+    margin: 0 0 0.5rem;
-+    font-size: 1.4rem;
-+    font-weight: 650;
-+    line-height: 1.3;
-+}
-+
-+.genres {
-+    display: flex;
-+    flex-wrap: wrap;
-+    gap: 0.65rem;
-+    margin-top: 1rem;
-+}
-+
-+.genres button:hover {
-+    border-color: var(--theme-colors-primary);
-+}
-+
-+.genres span {
-+    margin-left: 0.7rem;
-+    font-size: 0.75rem;
-+    opacity: 0.5;
-+}
-+
-+.results {
-+    scroll-margin-top: 5rem;
 +}
 +
 +.notice,
@@ -6608,7 +6620,7 @@ index 0000000..b820655
 +    min-width: 0;
 +    padding: 0;
 +    font: inherit;
-+    color: inherit;
++    color: var(--theme-colors-foreground);
 +    text-align: left;
 +    cursor: pointer;
 +    background: transparent;
@@ -6719,50 +6731,12 @@ index 0000000..b820655
 +    border-radius: 16px;
 +}
 +
-+@media (width <= 700px) {
-+    .page {
-+        padding: 4.5rem 1rem 8rem;
-+    }
-+
-+    .hero {
-+        padding: 1.5rem 1rem;
-+        border-radius: 16px;
-+    }
-+
-+    .search {
-+        grid-template-columns: minmax(0, 1fr);
-+    }
-+
-+    .shortcuts {
-+        grid-template-columns: minmax(0, 1fr);
-+    }
-+
-+    .shortcuts > * {
-+        gap: 0.4rem;
-+        padding: 1.25rem;
-+    }
-+
-+    .genres {
-+        gap: 0.5rem;
-+    }
-+
-+    .genres button {
-+        padding: 0.6rem 0.8rem;
-+        font-size: 0.85rem;
-+    }
-+
-+    .home-hero {
-+        padding: 1.25rem;
-+    }
-+}
-+
-+@media (prefers-reduced-motion: reduce) {
-+    .shortcuts > *,
-+    .radio-modes button,
-+    .radio-genres button {
-+        transform: none;
-+        transition: none;
-+    }
++.eyebrow {
++    margin: 0 0 0.8rem;
++    font-size: 0.7rem;
++    font-weight: 700;
++    color: var(--theme-colors-primary);
++    letter-spacing: 0.16em;
 +}
 +
 +.transport-label {
@@ -6784,12 +6758,23 @@ index 0000000..b820655
 +.discovery-volume input {
 +    accent-color: var(--theme-colors-primary);
 +}
++
++.saved-status {
++    max-width: 40%;
++    font-size: 0.75rem;
++    color: var(--theme-colors-foreground-muted);
++}
++
++.track-play:disabled {
++    cursor: default;
++    opacity: 0.65;
++}
 diff --git a/src/renderer/features/explore/new-music.tsx b/src/renderer/features/explore/new-music.tsx
 new file mode 100644
-index 0000000..3941b54
+index 0000000..60c30a7
 --- /dev/null
 +++ b/src/renderer/features/explore/new-music.tsx
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,236 @@
 +import { useQuery } from '@tanstack/react-query';
 +import { useState } from 'react';
 +
@@ -6800,16 +6785,19 @@ index 0000000..3941b54
 +
 +import { api } from '/@/renderer/api';
 +import { type DiscoveryContext, type ListeningMode } from '/@/renderer/api/musica/schemas';
++import { ItemImage } from '/@/renderer/components/item-image/item-image';
++import { usePlayer } from '/@/renderer/features/player/context/player-context';
 +import { Button } from '/@/shared/components/button/button';
-+import { type AppIconSelection, Icon } from '/@/shared/components/icon/icon';
 +import { Select } from '/@/shared/components/select/select';
 +import { TextInput } from '/@/shared/components/text-input/text-input';
++import { LibraryItem } from '/@/shared/types/domain-types';
++import { Play } from '/@/shared/types/types';
 +
 +const modes = [
-+    { icon: 'radio', label: 'Per te', mode: 'personal' },
-+    { icon: 'favorite', label: 'Preferiti', mode: 'favourites' },
-+    { icon: 'genre', label: 'Un genere', mode: 'genre' },
-+    { icon: 'playlist', label: 'Una playlist', mode: 'playlist' },
++    { label: 'Per te', mode: 'personal' },
++    { label: 'Genere', mode: 'genre' },
++    { label: 'Preferiti', mode: 'favourites' },
++    { label: 'Playlist', mode: 'playlist' },
 +] as const;
 +const genres = [
 +    'Punk',
@@ -6824,6 +6812,7 @@ index 0000000..3941b54
 +
 +export const NewMusic = ({ serverId }: { serverId: string }) => {
 +    const state = useDiscoveryRadio();
++    const player = usePlayer();
 +    const [mode, setMode] = useState<DiscoveryContext['mode']>(
 +        state.active ? state.context.mode : 'personal',
 +    );
@@ -6871,61 +6860,34 @@ index 0000000..3941b54
 +              ? Boolean(selectedPlaylist?.count)
 +              : true;
 +    return (
-+        <section aria-label="Scopri nuova musica" className={styles.newRadioHero}>
-+            <p className={styles.eyebrow}>SCOPRI IL TUO PROSSIMO BRANO</p>
-+            <h2>Da dove vuoi partire?</h2>
-+            <p className={styles.intro}>
-+                Scegli da dove partire. Ascolta musica nuova, salva quella che ami.
-+            </p>
-+            <div aria-label="Punto di partenza della radio" className={styles.radioModes}>
-+                {modes.map((item) => (
-+                    <button
-+                        aria-pressed={mode === item.mode}
-+                        key={item.mode}
-+                        onClick={() => setMode(item.mode)}
-+                        type="button"
-+                    >
-+                        <Icon icon={item.icon satisfies AppIconSelection} size="lg" />
-+                        {item.label}
-+                    </button>
-+                ))}
-+            </div>
-+            {mode === 'genre' && (
-+                <div className={styles.radioSource}>
++        <section aria-label="Scopri nuova musica" className={styles.newMusic}>
++            <div className={styles.radioForm}>
++                <Select
++                    allowDeselect={false}
++                    aria-label="Origine della nuova musica"
++                    data={modes.map((item) => ({ label: item.label, value: item.mode }))}
++                    label="Parti da"
++                    onChange={(value) => {
++                        const selected = modes.find((item) => item.mode === value);
++                        if (selected) setMode(selected.mode);
++                    }}
++                    value={mode}
++                />
++                {mode === 'genre' && (
 +                    <TextInput
 +                        aria-label="Genere della nuova musica"
-+                        label="Che genere vuoi ascoltare?"
++                        label="Genere"
 +                        maxLength={120}
 +                        onChange={(event) => setGenre(event.currentTarget.value)}
 +                        onKeyDown={(event) => {
 +                            if (event.key === 'Enter' && valid)
 +                                void startDiscoveryRadio(serverId, target);
 +                        }}
-+                        placeholder="Punk, shoegaze, drum and bass…"
++                        placeholder="Punk, shoegaze, ambient…"
 +                        value={genre}
 +                    />
-+                    <div aria-label="Generi rapidi" className={styles.radioGenres}>
-+                        {genres.map((name) => (
-+                            <button
-+                                key={name}
-+                                onClick={() => {
-+                                    setGenre(name);
-+                                    void startDiscoveryRadio(serverId, {
-+                                        label: name,
-+                                        mode: 'genre',
-+                                        value: name.toLowerCase(),
-+                                    });
-+                                }}
-+                                type="button"
-+                            >
-+                                <Icon icon="mediaPlay" size="sm" /> {name}
-+                            </button>
-+                        ))}
-+                    </div>
-+                </div>
-+            )}
-+            {mode === 'playlist' && (
-+                <div className={styles.radioSource}>
++                )}
++                {mode === 'playlist' && (
 +                    <Select
 +                        clearable
 +                        data={
@@ -6937,80 +6899,114 @@ index 0000000..3941b54
 +                        label="Playlist di partenza"
 +                        nothingFoundMessage="Nessuna playlist trovata"
 +                        onChange={setPlaylistId}
-+                        placeholder={
-+                            options.isPending
-+                                ? 'Carico le tue playlist…'
-+                                : 'Scegli o cerca una playlist'
-+                        }
++                        placeholder={options.isPending ? 'Caricamento…' : 'Scegli una playlist'}
 +                        searchable
 +                        value={playlistId}
 +                    />
-+                    {options.isError && (
-+                        <p role="alert">
-+                            Non riesco a caricare le playlist.{' '}
-+                            <Button onClick={() => void options.refetch()} size="sm">
-+                                Riprova
-+                            </Button>
-+                        </p>
-+                    )}
-+                    <ListeningChoices onChange={setListening} value={listening} />
-+                    {selectedPlaylist?.count === 0 && (
-+                        <p>Questa playlist è vuota: aggiungi almeno un brano.</p>
-+                    )}
++                )}
++            </div>
++            {mode === 'genre' && (
++                <div aria-label="Generi rapidi" className={styles.quickGenres}>
++                    {genres.map((name) => (
++                        <Button
++                            key={name}
++                            onClick={() => {
++                                setGenre(name);
++                                void startDiscoveryRadio(serverId, {
++                                    label: name,
++                                    mode: 'genre',
++                                    value: name.toLowerCase(),
++                                });
++                            }}
++                            size="sm"
++                            variant="subtle"
++                        >
++                            {name}
++                        </Button>
++                    ))}
 +                </div>
 +            )}
-+            {mode === 'favourites' && (
-+                <p>Nuovi brani simili ai tuoi preferiti, senza mescolare gli altri ascolti.</p>
-+            )}
-+            <RadioSourceButton
-+                context={target}
-+                disabled={!valid}
-+                label={
-+                    mode === 'playlist' && listening === 'library'
-+                        ? 'Ascolta playlist'
++            <div className={styles.radioActions}>
++                <RadioSourceButton context={target} disabled={!valid} label="Riproduci" />
++                {mode === 'playlist' && (
++                    <ListeningChoices onChange={setListening} value={listening} />
++                )}
++                <span className={styles.hint}>
++                    {mode === 'playlist' && listening === 'library'
++                        ? 'Solo i brani della playlist.'
 +                        : mode === 'playlist' && listening === 'mix'
-+                          ? 'Avvia mix'
-+                          : mode === 'personal'
-+                            ? 'Scopri nuova musica'
-+                            : 'Avvia radio'
-+                }
-+                large
-+            />
-+            {state.loading && (
-+                <p role="status">
-+                    {state.current ? 'Preparo il prossimo audio di ' : 'Preparo il primo audio di '}
-+                    {state.context.label}. Può richiedere qualche secondo; i successivi vengono
-+                    preparati mentre ascolti.
++                          ? 'Playlist e nuove proposte alternate.'
++                          : 'Nuovi brani dalla selezione.'}
++                </span>
++            </div>
++            {mode === 'playlist' && options.isError && (
++                <p role="alert">
++                    Non riesco a caricare le playlist.{' '}
++                    <Button onClick={() => void options.refetch()} variant="subtle">
++                        Riprova
++                    </Button>
 +                </p>
 +            )}
-+            {state.active && state.current && (
-+                <p aria-live="polite">
-+                    Radio <strong>{state.current.context_label || state.context.label}</strong> · In
-+                    ascolto: {state.current.track.title} · {state.current.track.artist}
++            {mode === 'playlist' && selectedPlaylist?.count === 0 && <p>La playlist è vuota.</p>}
++            {state.loading && (
++                <p role="status">
++                    {state.current ? 'Preparo il prossimo brano…' : 'Preparo il primo brano…'}
 +                </p>
 +            )}
 +            {(state.current?.track.error || state.error) && (
 +                <p role="alert">{state.current?.track.error || state.error}</p>
 +            )}
-+            <details className={styles.savedDiscoveries}>
++            <details className={styles.savedDiscoveries} open>
 +                <summary>
-+                    I brani che hai salvato
++                    Salvati
 +                    {saves.data?.tracks.length ? ` · ${saves.data.tracks.length}` : ''}
 +                </summary>
 +                {saves.isError && <p role="alert">Non riesco a caricare i salvataggi.</p>}
-+                {saves.data?.tracks.map((track) => (
-+                    <p key={track.id}>
-+                        {track.title} · {track.artist} —{' '}
-+                        {track.status === 'ready'
-+                            ? 'In libreria'
-+                            : track.status === 'failed'
-+                              ? track.error
-+                              : 'Salvataggio in corso…'}
-+                    </p>
-+                ))}
-+                {saves.data?.tracks.length === 0 && (
-+                    <p>Quando salvi un brano, lo ritrovi qui e nella libreria.</p>
-+                )}
++                <ol className={styles.tracks}>
++                    {saves.data?.tracks.map((track) => (
++                        <li className={styles.track} key={track.id}>
++                            <button
++                                aria-label={`Ascolta ${track.title}`}
++                                className={styles.trackPlay}
++                                disabled={track.status !== 'ready' || !track.song_id}
++                                onClick={() =>
++                                    player.addToQueueByFetch(
++                                        serverId,
++                                        [track.song_id],
++                                        LibraryItem.SONG,
++                                        Play.NOW,
++                                        { skipConfirmation: true },
++                                    )
++                                }
++                                type="button"
++                            >
++                                <div className={styles.cover}>
++                                    <ItemImage
++                                        id={track.song_id || undefined}
++                                        itemType={LibraryItem.SONG}
++                                        serverId={serverId}
++                                        type="table"
++                                    />
++                                </div>
++                                <div className={styles.trackText}>
++                                    <strong>{track.title}</strong>
++                                    <span>{track.artist}</span>
++                                </div>
++                            </button>
++                            <span
++                                className={styles.savedStatus}
++                                role={track.status === 'failed' ? 'alert' : undefined}
++                            >
++                                {track.status === 'ready'
++                                    ? 'In libreria'
++                                    : track.status === 'failed'
++                                      ? track.error
++                                      : 'Salvataggio…'}
++                            </span>
++                        </li>
++                    ))}
++                </ol>
++                {saves.data?.tracks.length === 0 && <p>Non hai ancora salvato brani.</p>}
 +            </details>
 +        </section>
 +    );
