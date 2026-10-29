@@ -14,12 +14,11 @@ from urllib.parse import urlsplit
 
 from musica_sync import new_music
 from musica_sync.discovery import DiscoveryError, authenticate, feedback, overview, search
-from musica_sync.radio_relay import open_stream, resolve
+from musica_sync.radio_relay import serve_stream
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = Path(os.environ.get("FEISHIN_ASSETS", str(ROOT / "bin/feishin-musica")))
 SEARCH_SLOTS = threading.BoundedSemaphore(2)
-RADIO_SLOTS = threading.BoundedSemaphore(16)
 
 
 class MusicHTTPServer(ThreadingHTTPServer):
@@ -112,45 +111,7 @@ class Handler(SimpleHTTPRequestHandler):
                     logging.info("Audio preview client disconnected")
 
     def serve_radio(self, *, send_body: bool) -> None:
-        try:
-            upstream = resolve(urlsplit(self.path).path)
-        except (OSError, ValueError):
-            upstream = None
-        if upstream is None:
-            self.send_error(404, "Radio not found")
-            return
-        if not RADIO_SLOTS.acquire(blocking=False):
-            self.send_error(503, "Radio connection limit reached")
-            return
-        started = False
-        try:
-            with open_stream(
-                upstream, metadata=self.headers.get("Icy-MetaData") == "1"
-            ) as response:
-                mime = response.headers.get_content_type()
-                if not mime.startswith("audio/"):
-                    raise ValueError("Radio upstream did not provide audio")
-                self.send_response(200)
-                self.send_header("Content-Type", mime)
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Connection", "close")
-                for name, value in response.headers.items():
-                    if name.lower().startswith("icy-"):
-                        self.send_header(name, value)
-                self.end_headers()
-                started = True
-                self.close_connection = True
-                if send_body:
-                    while chunk := response.read(8192):
-                        self.wfile.write(chunk)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-        except (OSError, ValueError):
-            logging.warning("Radio upstream unavailable")
-            if not started:
-                self.send_error(502, "Radio upstream unavailable")
-        finally:
-            RADIO_SLOTS.release()
+        serve_stream(self, send_body=send_body)
 
     def send_head(self):
         path = Path(self.translate_path(self.path))

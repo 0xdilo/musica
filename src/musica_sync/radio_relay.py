@@ -5,13 +5,18 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import secrets
+import threading
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from musica_sync.navidrome import ROOT, navidrome_url, validate_local_url
+
+LOGGER = logging.getLogger(__name__)
+STREAM_SLOTS = threading.BoundedSemaphore(16)
 
 KEY_FILE = ROOT / "state/discovery/relay.key"
 
@@ -94,6 +99,46 @@ def open_stream(url: str, *, metadata: bool = False):
     return build_opener(NoRedirect()).open(
         Request(validate_upstream(url), headers=headers), timeout=20
     )
+
+
+def serve_stream(handler, *, send_body: bool) -> None:
+    try:
+        upstream = resolve(urlsplit(handler.path).path)
+    except (OSError, ValueError):
+        upstream = None
+    if upstream is None:
+        handler.send_error(404, "Radio not found")
+        return
+    if not STREAM_SLOTS.acquire(blocking=False):
+        handler.send_error(503, "Radio connection limit reached")
+        return
+    started = False
+    try:
+        with open_stream(upstream, metadata=handler.headers.get("Icy-MetaData") == "1") as response:
+            mime = response.headers.get_content_type()
+            if not mime.startswith("audio/"):
+                raise ValueError("Radio upstream did not provide audio")
+            handler.send_response(200)
+            handler.send_header("Content-Type", mime)
+            handler.send_header("Cache-Control", "no-store")
+            handler.send_header("Connection", "close")
+            for name, value in response.headers.items():
+                if name.lower().startswith("icy-"):
+                    handler.send_header(name, value)
+            handler.end_headers()
+            started = True
+            handler.close_connection = True
+            if send_body:
+                while chunk := response.read(8192):
+                    handler.wfile.write(chunk)
+    except (BrokenPipeError, ConnectionResetError):
+        pass
+    except (OSError, ValueError):
+        LOGGER.warning("Radio upstream unavailable")
+        if not started:
+            handler.send_error(502, "Radio upstream unavailable")
+    finally:
+        STREAM_SLOTS.release()
 
 
 def install() -> None:

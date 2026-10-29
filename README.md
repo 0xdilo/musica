@@ -17,6 +17,10 @@ Play your playlists, discover music similar to them, or alternate the two. Save 
 
 The discovery controls are currently in Italian. The rest of Feishin retains its language settings. This is a personal, single-user setup made reusable; it is not an official Feishin or Navidrome release.
 
+## Amperfy and Shazam
+
+Prefer a native phone player? Use Amperfy with the same Navidrome library. The optional **Shazamma e salva** shortcut sends recognized tracks to Musica for automatic acquisition and import into a **Da Shazam** playlist. The private companion page handles setup, progress and retries, and can replace the web player while retaining the radio relay. See [setup and limitations](docs/amperfy-shazam.md). Recognition and shortcut execution must be verified on the target iPhone. Enable native discovery stations to listen to genre, favourites or playlist recommendations directly in Amperfy, with buffered MP3 streams and track metadata. Additional verified live stations are listed in `config/radio-stations.json`.
+
 ## Screenshots
 
 ![Playlist controls with real tracks](docs/screenshots/playlist-real-desktop.png)

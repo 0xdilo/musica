@@ -1,0 +1,32 @@
+{
+  "stations": [
+    {
+      "name": "Post-rock · Post-Rock Nation",
+      "genre": "post-rock",
+      "description": "Atmospheric and instrumental post-rock, established bands and new independent artists.",
+      "homepageUrl": "https://postrocknation.com/radio",
+      "streamUrl": "https://radio.postrocknation.com/listen/radio/radio.mp3"
+    },
+    {
+      "name": "Shoegaze / Dream pop · DKFM",
+      "genre": "shoegaze|dream pop",
+      "description": "Independent shoegaze and dream pop with regular new-release programming.",
+      "homepageUrl": "https://decayfm.com/",
+      "streamUrl": "https://kathy.torontocast.com:2005/stream"
+    },
+    {
+      "name": "Darkwave / Industrial · Sanctuary",
+      "genre": "darkwave|industrial|ebm|goth",
+      "description": "Dark electro, industrial, EBM, synthpop and goth.",
+      "homepageUrl": "https://www.sanctuaryradio.com/site/mainlisten.html",
+      "streamUrl": "https://stream.sanctuaryradio.com/mainchannel_hq"
+    },
+    {
+      "name": "New wave / Post-punk · Sanctuary",
+      "genre": "new wave|post-punk|alternative",
+      "description": "Alternative 80s, new wave and forgotten classics.",
+      "homepageUrl": "https://www.sanctuaryradio.com/site/retrolisten.html",
+      "streamUrl": "https://stream.sanctuaryradio.com/retrochannel_hq"
+    }
+  ]
+}

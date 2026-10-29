@@ -13,6 +13,7 @@ __pycache__/
 *.key
 *cookies*
 config/feishin.env
+config/capture.env
 data/
 state/
 music/

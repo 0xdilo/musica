@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#111014" />
+    <title>Musica · Shazamma e salva</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/" aria-label="Musica"
+        ><img src="/icon.svg" width="30" height="30" alt="" />Musica</a
+      ><span class="tag">Per Amperfy</span>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">COMANDO PER IPHONE</p>
+        <h1>Shazamma<br />e salva.</h1>
+        <p>
+          Ascolta una radio. Shazamma il brano che ti prende.<br
+            class="desktop"
+          />
+          Lo ritrovi nella tua libreria, senza cercarlo di nuovo.
+        </p>
+      </section>
+      <section id="login-panel" class="panel">
+        <h2>Collega il tuo iPhone</h2>
+        <p>Usa lo stesso account di Amperfy e Navidrome.</p>
+        <form id="login-form">
+          <label for="username">Nome utente</label
+          ><input
+            id="username"
+            name="username"
+            autocomplete="username"
+            required
+          /><label for="password">Password</label
+          ><input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          /><button type="submit" id="login">
+            Collega dispositivo <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+      </section>
+      <div id="connected" hidden>
+        <section class="panel setup">
+          <div class="section-heading">
+            <h2>Un minuto, una volta sola.</h2>
+            <button class="quiet" id="logout" type="button">
+              Scollega pagina
+            </button>
+          </div>
+          <ol class="steps">
+            <li>
+              <div>
+                <h3>Copia la configurazione</h3>
+                <p>
+                  Serve a collegare il comando alla tua libreria. Tienila
+                  privata.
+                </p>
+                <button id="copy" type="button">Copia configurazione</button>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>Aggiungi il comando</h3>
+                <p>
+                  Apri il file in Comandi Rapidi. Quando richiesto, incolla la
+                  configurazione.
+                </p>
+                <a
+                  class="button secondary"
+                  href="/Shazamma-e-salva.shortcut"
+                  id="install"
+                  >Aggiungi Shazamma e salva
+                  <span aria-hidden="true">↗</span></a
+                >
+                <p class="hint">
+                  Se Safari scarica il file, aprilo da Download e scegli Comandi
+                  Rapidi.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>Fallo diventare un gesto</h3>
+                <p>
+                  Impostazioni → Accessibilità → Tocco → Tocco posteriore →
+                  Tocco doppio → <strong>Shazamma e salva</strong>.
+                </p>
+                <p class="hint">
+                  Puoi anche dire: “Siri, Shazamma e salva”. Al primo utilizzo
+                  autorizza riconoscimento, connessione e notifiche. Con le
+                  cuffie, verifica che il comando riesca a riconoscere l’audio
+                  di Amperfy.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </section>
+        <section class="radio-section" id="radio-section" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">IN AMPERFY</p>
+              <h2>Le tue radio di scoperta</h2>
+            </div>
+          </div>
+          <p class="description">
+            Solo brani nuovi, scelti da un genere o dai tuoi ascolti. Le radio
+            pronte compaiono nella sezione Radio di Amperfy: aggiorna l’elenco
+            nell’app.
+          </p>
+          <ul id="radio-list" aria-label="Radio personalizzate"></ul>
+          <details class="connection">
+            <summary>Aggiungi una radio</summary>
+            <form id="radio-form">
+              <label for="radio-source">Da dove partiamo?</label>
+              <select id="radio-source">
+                <option value="genre">Da un genere</option>
+                <option value="favourites">Dai miei preferiti</option>
+                <option value="playlist">Da una playlist</option>
+                <option value="personal">Per te</option>
+              </select>
+              <div id="radio-genre-field">
+                <label for="radio-genre">Genere</label
+                ><input
+                  id="radio-genre"
+                  placeholder="Post-rock, emo, shoegaze…"
+                  maxlength="120"
+                />
+              </div>
+              <div id="radio-playlist-field" hidden>
+                <label for="radio-playlist">Playlist di partenza</label
+                ><select id="radio-playlist"></select>
+              </div>
+              <button type="submit" id="create-radio">
+                Crea radio in Amperfy
+              </button>
+              <p class="hint">
+                Il server prepara i primi brani prima di pubblicarla. Non
+                vengono aggiunti alla libreria: salvi solo quelli che scegli con
+                Shazam.
+              </p>
+            </form>
+          </details>
+        </section>
+        <section class="activity">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LA TUA RACCOLTA</p>
+              <h2>Da Shazam</h2>
+            </div>
+            <button class="quiet" id="refresh" type="button">Aggiorna</button>
+          </div>
+          <p class="description">
+            I brani importati vengono aggiunti alla playlist
+            <strong>Da Shazam</strong> in Amperfy. Se non compare subito,
+            aggiorna le playlist nell’app.
+          </p>
+          <ul id="tracks" aria-label="Brani salvati con Shazam"></ul>
+          <p id="empty" class="empty">
+            La prossima bella scoperta finisce qui.
+          </p>
+        </section>
+        <details class="connection">
+          <summary>Connessione Amperfy</summary>
+          <p>Tipo server: <strong>Subsonic / Navidrome</strong></p>
+          <label for="library-url">Indirizzo server</label>
+          <div class="copy-row">
+            <input id="library-url" readonly /><button
+              class="secondary"
+              id="copy-server"
+              type="button"
+            >
+              Copia
+            </button>
+          </div>
+          <p>
+            Usa il tuo account Navidrome. Tailscale deve essere connesso anche
+            per inviare i brani dal comando.
+          </p>
+        </details>
+      </div>
+      <p id="notice" role="status" aria-live="polite"></p>
+    </main>
+    <footer>Ascolti in Amperfy. Le scoperte arrivano qui.</footer>
+  </body>
+</html>

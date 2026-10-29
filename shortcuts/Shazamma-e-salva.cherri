@@ -1,0 +1,37 @@
+#define name Shazamma e salva
+#define color purple
+#define glyph musicWaveForm
+#include 'actions/text'
+#include 'actions/web'
+#include 'actions/media'
+
+#question configuration "Incolla la configurazione copiata dalla pagina Musica. Contiene un accesso personale: non condividerla." "{}"
+const raw = text(configuration)
+const settings = getDictionary(raw)
+const endpoint = getValue(settings, "url")
+const token = getValue(settings, "token")
+if !endpoint {
+    alert("Apri la pagina Musica, copia la configurazione e aggiungi di nuovo questo comando.", "Collega Musica")
+    stop()
+}
+if !token {
+    alert("Manca il collegamento alla tua libreria. Copia la configurazione dalla pagina Musica.", "Collega Musica")
+    stop()
+}
+const match = startShazam(false, false)
+if !match {
+    showNotification("Non ho riconosciuto il brano. Lascia suonare ancora un po’ e riprova.", "Musica", false)
+    stop()
+}
+const artist = text("{match['Artist']}")
+const title = text("{match['Title']}")
+const result = jsonRequest("{endpoint}", "POST", {"artist": "{artist}", "title": "{title}"}, {"Authorization": "Bearer {token}"})
+const response = getDictionary(result)
+const accepted = getValue(response, "accepted")
+if !accepted {
+    const error = getValue(response, "error")
+    alert("{error}", "Brano non salvato")
+    stop()
+}
+const message = getValue(response, "message")
+showNotification("{title} · {artist}\n{message}", "Musica", false)
